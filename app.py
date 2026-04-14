@@ -7,7 +7,7 @@ import io
 app = Flask(__name__)
 CORS(app)
 # Background removal ke liye professional session
-model_session = new_session("u2net")
+model_session = new_session("u2netp")
 
 @app.route('/')
 def home():
