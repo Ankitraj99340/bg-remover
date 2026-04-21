@@ -44,13 +44,24 @@ def process_image():
                 return f"API Error: {response.text}", 500
 
         # 2. FEATURE: Professional Enhancement
-        elif action == 'enhance':
-            if img.mode != 'RGB': img = img.convert('RGB')
-            img = ImageEnhance.Contrast(img).enhance(1.4)
-            img = ImageEnhance.Sharpness(img).enhance(2.5)
-            img = ImageEnhance.Color(img).enhance(1.2)
-            img = img.filter(ImageFilter.DETAIL)
-
+       elif action == 'enhance':
+        if img.mode != 'RGB': 
+            img = img.convert('RGB')
+        
+        # 1. Digital Noise hatane ke liye halka smoothing
+        img = img.filter(ImageFilter.SMOOTH)
+        
+        # 2. Contrast thoda zyada badhayein (Isse clarity feel hoti hai)
+        img = ImageEnhance.Contrast(img).enhance(1.5)
+        
+        # 3. Sharpness ko limit mein rakhein (Zyada karne se size badhta hai aur noise aati hai)
+        img = ImageEnhance.Sharpness(img).enhance(1.8)
+        
+        # 4. Halka sa Color boost
+        img = ImageEnhance.Color(img).enhance(1.2)
+        
+        # 5. Ye filter edges ko saaf karta hai bina pixels fhaade
+        img = img.filter(ImageFilter.EDGE_ENHANCE)
         # 3. FEATURE: Resize
         elif action == 'resize':
             w = int(request.form.get('width', 800))
