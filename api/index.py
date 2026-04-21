@@ -1,8 +1,6 @@
 import os
 import requests
 import io
-import base64
-import time
 from flask import Flask, request, send_file, render_template
 from flask_cors import CORS
 from PIL import Image, ImageEnhance, ImageFilter
@@ -10,9 +8,8 @@ from PIL import Image, ImageEnhance, ImageFilter
 app = Flask(__name__, template_folder='../templates')
 CORS(app)
 
-# --- API KEYS ---
-REMOVE_BG_API_KEY = "YOUR_REMOVE_BG_KEY"
-REPLICATE_API_TOKEN = "YOUR_REPLICATE_TOKEN"
+# --- API KEY ---
+REMOVE_BG_API_KEY = "243wBcfWYybSEGmKZTyM9EAz"
 
 @app.route('/')
 def home():
@@ -20,7 +17,6 @@ def home():
 
 @app.route('/process', methods=['POST'])
 def process_image():
-    img = None # Memory management ke liye
     try:
         if 'image' not in request.files:
             return "No image uploaded", 400
@@ -33,7 +29,7 @@ def process_image():
         mimetype = 'image/png'
         download_name = 'processed_image.png'
 
-        # --- 1. AI BACKGROUND REMOVAL ---
+        # 1. Background Removal
         if action == 'remove_bg':
             file.stream.seek(0)
             response = requests.post(
@@ -45,61 +41,38 @@ def process_image():
             if response.status_code == requests.codes.ok:
                 img = Image.open(io.BytesIO(response.content))
             else:
-                return f"BG API Error: {response.text}", 500
+                return f"API Error: {response.text}", 500
 
-        # --- 2. REMINI-STYLE AI ENHANCEMENT (Optimized for Vercel) ---
+        # 2. Professional Enhancement (Sahi Indented)
         elif action == 'enhance':
-            # Vercel Timeout se bachne ke liye photo choti karein
-            img.thumbnail((750, 750)) 
+            if img.mode != 'RGB': 
+                img = img.convert('RGB')
             
-            buffered = io.BytesIO()
-            img.save(buffered, format="JPEG", quality=85)
-            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-            img_data_uri = f"data:image/jpeg;base64,{img_str}"
-
-            headers = {
-                "Authorization": f"Token {REPLICATE_API_TOKEN}",
-                "Content-Type": "application/json"
-            }
+            # 1. Digital Noise hatane ke liye
+            img = img.filter(ImageFilter.SMOOTH)
             
-            payload = {
-                "version": "7de2ea1114d03d9f344863e2a95c944487f3b610c21342c366472477382221b6",
-                "input": {"img": img_data_uri, "upscale": 2}
-            }
-
-            res_start = requests.post("https://api.replicate.com/v1/predictions", headers=headers, json=payload)
-            if res_start.status_code != 201:
-                return f"AI API Error: {res_start.text}", 500
+            # 2. Contrast badhayein aur result ko 'img' mein save karein
+            enhancer_con = ImageEnhance.Contrast(img)
+            img = enhancer_con.enhance(1.5)
             
-            predict_id = res_start.json()['id']
-            start_time = time.time()
+            # 3. Sharpness badhayein
+            enhancer_sharp = ImageEnhance.Sharpness(img)
+            img = enhancer_sharp.enhance(1.8)
+            
+            # 4. Color boost karein
+            enhancer_col = ImageEnhance.Color(img)
+            img = enhancer_col.enhance(1.2)
+            
+            # 5. Edges ko saaf karein
+            img = img.filter(ImageFilter.EDGE_ENHANCE)
 
-            # Smart Loop with Timeout protection
-            while True:
-                # Agar 45 second se upar hua toh band karo (Vercel limit)
-                if time.time() - start_time > 45:
-                    return "AI processing took too long. Try a smaller photo.", 504
-                
-                res_check = requests.get(f"https://api.replicate.com/v1/predictions/{predict_id}", headers=headers)
-                data = res_check.json()
-                status = data.get('status')
-                
-                if status == "succeeded":
-                    img_res = requests.get(data['output'])
-                    img = Image.open(io.BytesIO(img_res.content))
-                    break
-                elif status == "failed":
-                    return "AI Restoration Failed", 500
-                
-                time.sleep(3) # Load kam karne ke liye gap
-
-        # --- 3. RESIZE ---
+        # 3. Resize
         elif action == 'resize':
             w = int(request.form.get('width', 800))
             h = int(request.form.get('height', 800))
             img = img.resize((w, h), Image.Resampling.LANCZOS)
 
-        # --- 4. SMART COMPRESSION ---
+        # 4. Smart Compression
         elif action == 'compress':
             if img.mode in ("RGBA", "P"): img = img.convert("RGB")
             target_kb = float(request.form.get('target_kb', 100))
@@ -108,30 +81,23 @@ def process_image():
             
             quality = 95
             img_io = io.BytesIO()
-            while quality > 10:
-                img_io = io.BytesIO()
-                img.save(img_io, format='JPEG', quality=quality, optimize=True)
-                if img_io.tell() <= target_kb * 1024:
-                    break
+            img.save(img_io, format='JPEG', quality=quality)
+            while img_io.tell() > target_kb * 1024 and quality > 10:
                 quality -= 5
+                img_io = io.BytesIO()
+                img.save(img_io, format='JPEG', quality=quality)
             img_io.seek(0)
             return send_file(img_io, mimetype=mimetype, as_attachment=True, download_name=download_name)
 
-        # FINAL OUTPUT (Optimized size)
+        # Final Response
         img_io = io.BytesIO()
-        if save_format == 'PNG':
-            img.save(img_io, format='PNG', optimize=True)
-        else:
-            img.save(img_io, format='JPEG', quality=85, optimize=True)
-            
+        img.save(img_io, format=save_format)
         img_io.seek(0)
         return send_file(img_io, mimetype=mimetype, as_attachment=True, download_name=download_name)
 
     except Exception as e:
         return str(e), 500
-    finally:
-        if img:
-            img.close() # Memory release karein
 
+# Local Testing ke liye (Deploy ke waqt ye hatana nahi hai, rehne dein)
 #if __name__ == '__main__':
-  #  app.run(debug=True, port=5000)
+   # app.run(debug=True, port=5000)
