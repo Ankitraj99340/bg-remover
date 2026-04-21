@@ -8,7 +8,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 app = Flask(__name__, template_folder='../templates')
 CORS(app)
 
-# --- API KEY (Yahan apni remove.bg key dalein) ---
+# --- API KEY ---
 REMOVE_BG_API_KEY = "243wBcfWYybSEGmKZTyM9EAz"
 
 @app.route('/')
@@ -29,9 +29,9 @@ def process_image():
         mimetype = 'image/png'
         download_name = 'processed_image.png'
 
-        # 1. FEATURE: Background Removal (Via API - No Crash)
+        # 1. Background Removal
         if action == 'remove_bg':
-            file.stream.seek(0) # File pointer reset
+            file.stream.seek(0)
             response = requests.post(
                 'https://api.remove.bg/v1.0/removebg',
                 files={'image_file': file.read()},
@@ -43,39 +43,29 @@ def process_image():
             else:
                 return f"API Error: {response.text}", 500
 
-        # 2. FEATURE: Professional Enhancement
-       elif action == 'enhance':
-        if img.mode != 'RGB': 
-            img = img.convert('RGB')
-        
-        # 1. Digital Noise hatane ke liye halka smoothing
-        img = img.filter(ImageFilter.SMOOTH)
-        
-        # 2. Contrast thoda zyada badhayein (Isse clarity feel hoti hai)
-        img = ImageEnhance.Contrast(img).enhance(1.5)
-        
-        # 3. Sharpness ko limit mein rakhein (Zyada karne se size badhta hai aur noise aati hai)
-        img = ImageEnhance.Sharpness(img).enhance(1.8)
-        
-        # 4. Halka sa Color boost
-        img = ImageEnhance.Color(img).enhance(1.2)
-        
-        # 5. Ye filter edges ko saaf karta hai bina pixels fhaade
-        img = img.filter(ImageFilter.EDGE_ENHANCE)
-        # 3. FEATURE: Resize
+        # 2. Professional Enhancement (Sahi Indented)
+        elif action == 'enhance':
+            if img.mode != 'RGB': 
+                img = img.convert('RGB')
+            img = img.filter(ImageFilter.SMOOTH)
+            img = ImageEnhance.Contrast(img).enhance(1.5)
+            img = ImageEnhance.Sharpness(img).enhance(1.8)
+            img = ImageEnhance.Color(img).enhance(1.2)
+            img = img.filter(ImageFilter.EDGE_ENHANCE)
+
+        # 3. Resize
         elif action == 'resize':
             w = int(request.form.get('width', 800))
             h = int(request.form.get('height', 800))
             img = img.resize((w, h), Image.Resampling.LANCZOS)
 
-        # 4. FEATURE: Smart Compression
+        # 4. Smart Compression
         elif action == 'compress':
             if img.mode in ("RGBA", "P"): img = img.convert("RGB")
             target_kb = float(request.form.get('target_kb', 100))
             save_format, mimetype = 'JPEG', 'image/jpeg'
             download_name = 'compressed.jpg'
             
-            # Binary search logic for perfect compression
             quality = 95
             img_io = io.BytesIO()
             img.save(img_io, format='JPEG', quality=quality)
@@ -86,11 +76,6 @@ def process_image():
             img_io.seek(0)
             return send_file(img_io, mimetype=mimetype, as_attachment=True, download_name=download_name)
 
-        # EXTRA FEATURE: Auto-Fix (Brightness & Sharpness balance)
-        if request.form.get('autofix') == 'true':
-            img = ImageEnhance.Brightness(img).enhance(1.1)
-            img = ImageEnhance.Sharpness(img).enhance(1.5)
-
         # Final Response
         img_io = io.BytesIO()
         img.save(img_io, format=save_format)
@@ -99,3 +84,7 @@ def process_image():
 
     except Exception as e:
         return str(e), 500
+
+# Local Testing ke liye (Deploy ke waqt ye hatana nahi hai, rehne dein)
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
