@@ -86,5 +86,5 @@ def process_image():
         return str(e), 500
 
 # Local Testing ke liye (Deploy ke waqt ye hatana nahi hai, rehne dein)
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+#if __name__ == '__main__':
+   # app.run(debug=True, port=5000)
