@@ -47,10 +47,23 @@ def process_image():
         elif action == 'enhance':
             if img.mode != 'RGB': 
                 img = img.convert('RGB')
+            
+            # 1. Digital Noise hatane ke liye
             img = img.filter(ImageFilter.SMOOTH)
-            img = ImageEnhance.Contrast(img).enhance(1.5)
-            img = ImageEnhance.Sharpness(img).enhance(1.8)
-            img = ImageEnhance.Color(img).enhance(1.2)
+            
+            # 2. Contrast badhayein aur result ko 'img' mein save karein
+            enhancer_con = ImageEnhance.Contrast(img)
+            img = enhancer_con.enhance(1.5)
+            
+            # 3. Sharpness badhayein
+            enhancer_sharp = ImageEnhance.Sharpness(img)
+            img = enhancer_sharp.enhance(1.8)
+            
+            # 4. Color boost karein
+            enhancer_col = ImageEnhance.Color(img)
+            img = enhancer_col.enhance(1.2)
+            
+            # 5. Edges ko saaf karein
             img = img.filter(ImageFilter.EDGE_ENHANCE)
 
         # 3. Resize
