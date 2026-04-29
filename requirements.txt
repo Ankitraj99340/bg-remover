@@ -1,5 +1,6 @@
-flask
-flask-cors
-rembg
-onnxruntime
+Flask
+Flask-Cors
+requests
 Pillow
+numpy
+opencv-python-headless
