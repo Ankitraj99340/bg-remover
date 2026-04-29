@@ -1,6 +1,8 @@
 import os
 import requests
 import io
+import cv2
+import numpy as np 
 from flask import Flask, request, send_file, render_template
 from flask_cors import CORS
 from PIL import Image, ImageEnhance, ImageFilter
@@ -25,13 +27,18 @@ def process_image():
         action = request.form.get('action')
         img = Image.open(file.stream)
         
+        # Default settings
         save_format = 'PNG'
         mimetype = 'image/png'
         download_name = 'processed_image.png'
 
-        # 1. Background Removal
+        # Ensure image is in RGB for processing
+        if img.mode != 'RGB' and action != 'remove_bg':
+            img = img.convert('RGB')
+
+        # --- 1. FEATURE: Background Removal (Wahi Same Logic) ---
         if action == 'remove_bg':
-            file.stream.seek(0)
+            file.stream.seek(0) 
             response = requests.post(
                 'https://api.remove.bg/v1.0/removebg',
                 files={'image_file': file.read()},
@@ -40,39 +47,48 @@ def process_image():
             )
             if response.status_code == requests.codes.ok:
                 img = Image.open(io.BytesIO(response.content))
+                download_name = 'no_bg.png'
             else:
                 return f"API Error: {response.text}", 500
 
-        # 2. Professional Enhancement (Sahi Indented)
+        # --- 2. FEATURE: Professional Enhancement (New Natural Logic) ---
         elif action == 'enhance':
-            if img.mode != 'RGB': 
-                img = img.convert('RGB')
+            # Step 1: Subtle Upscaling (1.5x quality ke liye)
+            w, h = img.size
+            img = img.resize((int(w * 1.5), int(h * 1.5)), Image.Resampling.LANCZOS)
             
-            # 1. Digital Noise hatane ke liye
-            img = img.filter(ImageFilter.SMOOTH)
-            
-            # 2. Contrast badhayein aur result ko 'img' mein save karein
-            enhancer_con = ImageEnhance.Contrast(img)
-            img = enhancer_con.enhance(1.5)
-            
-            # 3. Sharpness badhayein
-            enhancer_sharp = ImageEnhance.Sharpness(img)
-            img = enhancer_sharp.enhance(1.8)
-            
-            # 4. Color boost karein
-            enhancer_col = ImageEnhance.Color(img)
-            img = enhancer_col.enhance(1.2)
-            
-            # 5. Edges ko saaf karein
-            img = img.filter(ImageFilter.EDGE_ENHANCE)
+            img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
-        # 3. Resize
+            # Step 2: Bilateral Filtering (Natural Smoothing)
+            # fastNlMeans ki jagah ye use kiya hai taaki chehra 'harsh' na dikhe
+            img_cv = cv2.bilateralFilter(img_cv, d=5, sigmaColor=35, sigmaSpace=35)
+
+            # Step 3: CLAHE (Natural Contrast)
+            lab = cv2.cvtColor(img_cv, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(4,4))
+            l = clahe.apply(l)
+            img_cv = cv2.merge((l, a, b))
+            img_cv = cv2.cvtColor(img_cv, cv2.COLOR_LAB2BGR)
+
+            # Step 4: Back to PIL
+            img = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
+
+            # Step 5: Smart Sharpening (Soft edges)
+            img = img.filter(ImageFilter.UnsharpMask(radius=0.8, percent=100, threshold=3))
+            
+            # Step 6: Final Polish
+            img = ImageEnhance.Color(img).enhance(1.15)
+            img = ImageEnhance.Contrast(img).enhance(1.05)
+            download_name = 'enhanced.png'
+
+        # --- 3. FEATURE: Resize (Wahi Same Logic) ---
         elif action == 'resize':
             w = int(request.form.get('width', 800))
             h = int(request.form.get('height', 800))
             img = img.resize((w, h), Image.Resampling.LANCZOS)
 
-        # 4. Smart Compression
+        # --- 4. FEATURE: Smart Compression (Wahi Same Logic) ---
         elif action == 'compress':
             if img.mode in ("RGBA", "P"): img = img.convert("RGB")
             target_kb = float(request.form.get('target_kb', 100))
@@ -89,6 +105,11 @@ def process_image():
             img_io.seek(0)
             return send_file(img_io, mimetype=mimetype, as_attachment=True, download_name=download_name)
 
+        # --- EXTRA FEATURE: Auto-Fix ---
+        if request.form.get('autofix') == 'true':
+            img = ImageEnhance.Brightness(img).enhance(1.1)
+            img = ImageEnhance.Sharpness(img).enhance(1.5)
+
         # Final Response
         img_io = io.BytesIO()
         img.save(img_io, format=save_format)
@@ -96,8 +117,7 @@ def process_image():
         return send_file(img_io, mimetype=mimetype, as_attachment=True, download_name=download_name)
 
     except Exception as e:
-        return str(e), 500
+        return f"Server Error: {str(e)}", 500
 
-# Local Testing ke liye (Deploy ke waqt ye hatana nahi hai, rehne dein)
-#if __name__ == '__main__':
-   # app.run(debug=True, port=5000)
+if __name__ == '__main__':
+    app.run(debug=True)
