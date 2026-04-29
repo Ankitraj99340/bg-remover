@@ -55,7 +55,7 @@ def process_image():
         elif action == 'enhance':
             # Step 1: Subtle Upscaling (1.5x quality ke liye)
             w, h = img.size
-            img = img.resize(((w,h), Image.Resampling.LANCZOS)
+            img = img.resize((w,h), Image.Resampling.LANCZOS)
             
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
